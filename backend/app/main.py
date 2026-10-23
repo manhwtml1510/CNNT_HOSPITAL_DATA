@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import engine, get_db
 
+from app.api.auth import router as auth_router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -27,6 +29,9 @@ app = FastAPI(
     description="Hospital storage and data protection system",
     lifespan=lifespan,
 )
+
+app.include_router(auth_router, prefix="/api/v1")
+
 
 
 @app.get("/health", tags=["System"])
