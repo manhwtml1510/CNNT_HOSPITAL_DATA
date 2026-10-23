@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     
     jwt_secret_key: str
     access_token_expire_minutes: int = 20
+    
+    storage_root: str = r"D:\HospitalData"
+    max_upload_size_bytes: int = 10*1024*1024
 
     model_config = SettingsConfigDict(
         env_file=".env",

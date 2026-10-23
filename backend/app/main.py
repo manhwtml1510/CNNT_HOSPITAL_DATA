@@ -10,6 +10,7 @@ from app.core.database import engine, get_db
 
 from app.api.auth import router as auth_router
 from app.api.records import router as records_router
+from app.api.files import router as files_router
 
 
 @asynccontextmanager
@@ -33,6 +34,7 @@ app = FastAPI(
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(records_router, prefix="/api/v1")
+app.include_router(files_router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["System"])
