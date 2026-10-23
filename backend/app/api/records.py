@@ -1,6 +1,12 @@
-
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+)
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.audit import record_audit
@@ -10,7 +16,11 @@ from app.core.dependencies import (
     require_permission,
 )
 from app.models import MedicalRecord, User
-from app.schemas.records import MedicalRecordResponse
+from app.schemas.records import (
+    MedicalRecordCreateRequest,
+    MedicalRecordResponse,
+    MedicalRecordUpdateRequest,
+)
 
 
 router = APIRouter(prefix="/records", tags=["Medical Records"])
@@ -105,4 +115,115 @@ def get_record(
         outcome="success",
     )
 
+    return record
+
+
+@router.post("", response_model=MedicalRecordResponse, status_code=201)
+def create_record(
+    payload: MedicalRecordCreateRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("records:create")),
+):
+    # Người dùng thông thường chỉ được tạo hồ sơ trong khoa của mình.
+    if not is_system_admin(user) and payload.department != user.department:
+        record_audit(
+            db,
+            request,
+            actor_user_id=user.id,
+            action="records.create",
+            resource_type="medical_record",
+            resource_id=payload.record_number,
+            outcome="denied",
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="You cannot create records for another department",
+        )
+
+    record = MedicalRecord(
+        record_number=payload.record_number,
+        patient_code=payload.patient_code,
+        title=payload.title,
+        department=payload.department,
+        status="active",
+        created_by_id=user.id,
+    )
+
+    db.add(record)
+
+    try:
+        db.commit()
+        db.refresh(record)
+    except IntegrityError:
+        db.rollback()
+        record_audit(
+            db,
+            request,
+            actor_user_id=user.id,
+            action="records.create",
+            resource_type="medical_record",
+            resource_id=payload.record_number,
+            outcome="failure",
+        )
+        raise HTTPException(
+            status_code=409,
+            detail="Record number already exists or data violates a database constraint",
+        )
+
+    record_audit(
+        db,
+        request,
+        actor_user_id=user.id,
+        action="records.create",
+        resource_type="medical_record",
+        resource_id=str(record.id),
+        outcome="success",
+    )
+    return record
+
+
+@router.patch("/{record_id}", response_model=MedicalRecordResponse)
+def update_record(
+    record_id: int,
+    payload: MedicalRecordUpdateRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("records:update")),
+):
+    statement = select(MedicalRecord).where(
+        MedicalRecord.id == record_id
+    )
+    statement = scope_records_to_user(statement, user)
+    record = db.scalar(statement)
+
+    if record is None:
+        record_audit(
+            db,
+            request,
+            actor_user_id=user.id,
+            action="records.update",
+            resource_type="medical_record",
+            resource_id=str(record_id),
+            outcome="denied_or_not_found",
+        )
+        raise HTTPException(
+            status_code=404,
+            detail="Medical record not found",
+        )
+
+    record.title = payload.title
+    record.status = payload.status
+    db.commit()
+    db.refresh(record)
+
+    record_audit(
+        db,
+        request,
+        actor_user_id=user.id,
+        action="records.update",
+        resource_type="medical_record",
+        resource_id=str(record.id),
+        outcome="success",
+    )
     return record
