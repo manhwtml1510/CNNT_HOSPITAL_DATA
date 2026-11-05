@@ -190,19 +190,63 @@ def _run_dump(database_file: Path) -> None:
 def _storage_files(storage_root: Path):
     if not storage_root.exists():
         return
-    if storage_root.is_symlink() or not storage_root.is_dir():
-        raise BackupOperationError("Medical-file storage must be a regular directory.")
 
-    for current, directories, filenames in os.walk(storage_root, followlinks=False):
-        current_path = Path(current)
-        for directory in directories:
-            if (current_path / directory).is_symlink():
-                raise BackupOperationError("Medical-file storage contains a symbolic link; backup stopped.")
-        for filename in filenames:
-            file_path = current_path / filename
-            if file_path.is_symlink() or not file_path.is_file():
-                raise BackupOperationError("Medical-file storage contains a non-regular file; backup stopped.")
-            yield file_path
+    if storage_root.is_symlink() or not storage_root.is_dir():
+        raise BackupOperationError(
+            "Medical-file storage must be a regular directory."
+        )
+
+    for department in sorted(ALLOWED_DEPARTMENTS):
+        department_path = storage_root / department
+
+        # Phòng ban chưa có file thì không cần tạo thư mục.
+        if not department_path.exists():
+            continue
+
+        if department_path.is_symlink() or not department_path.is_dir():
+            raise BackupOperationError(
+                f"Invalid medical department directory: {department}"
+            )
+
+        for current, directories, filenames in os.walk(
+            department_path,
+            followlinks=False,
+        ):
+            current_path = Path(current)
+
+            # Không cho phép symbolic link trong vùng lưu trữ.
+            for directory in directories:
+                directory_path = current_path / directory
+
+                if directory_path.is_symlink():
+                    raise BackupOperationError(
+                        "Medical-file storage contains a symbolic link; "
+                        "backup stopped."
+                    )
+
+            # File phải nằm trực tiếp trong thư mục phòng ban.
+            if current_path != department_path:
+                raise BackupOperationError(
+                    f"Nested directories are not supported in "
+                    f"department storage: {department}"
+                )
+
+            for filename in filenames:
+                file_path = current_path / filename
+
+                if file_path.is_symlink() or not file_path.is_file():
+                    raise BackupOperationError(
+                        "Medical-file storage contains a non-regular "
+                        "file; backup stopped."
+                    )
+
+                if re.fullmatch(r"[a-f0-9]{32}", filename) is None:
+                    raise BackupOperationError(
+                        f"Invalid medical storage key in department "
+                        f"{department}: {filename}"
+                    )
+
+                yield file_path
 
 
 def _build_archive(job_id: int, job_type: str, root: Path) -> tuple[Path, int, str]:

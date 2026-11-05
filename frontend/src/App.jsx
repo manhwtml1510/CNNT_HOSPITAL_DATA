@@ -349,7 +349,7 @@ function LoginScreen({ onSubmit, saving, error }) {
     <div className="login-kicker"><span className="live-dot" /> CỔNG HỒ SƠ Y TẾ AN TOÀN</div><h1>Chào mừng<br />bạn trở lại.</h1><p className="login-copy">Đăng nhập bằng tài khoản bệnh viện để truy cập hồ sơ được cấp quyền.</p>
     {error && <div className="alert error-alert" role="alert"><span>!</span>{error}</div>}
     <form className="login-form" onSubmit={onSubmit}><label>Tên đăng nhập<input name="username" autoComplete="username" placeholder="Nhập tên đăng nhập" maxLength="80" required autoFocus /></label><label>Mật khẩu<input type="password" name="password" autoComplete="current-password" placeholder="Nhập mật khẩu" maxLength="256" required /></label><button className="primary-button login-submit" disabled={saving}>{saving ? 'Đang đăng nhập…' : 'Đăng nhập'}<span>→</span></button></form>
-    <div className="login-security"><span>♢</span><div><strong>Kết nối bảo mật</strong><small>Token truy cập ngắn hạn · Quyền theo vai trò</small></div></div>
+    <div className="login-security"><span>♢</span><div><strong>Kết nối bảo mật</strong></div></div>
     <p className="login-footer">Cần tài khoản? Liên hệ quản trị viên hệ thống.</p>
   </section><div className="login-aside"><div className="aside-motif">✚</div><p>HỒ SƠ CHĂM SÓC<br /><strong>ĐƯỢC BẢO VỆ.</strong></p><span>Không gian làm việc cho đội ngũ y tế.</span></div></main>
 }
