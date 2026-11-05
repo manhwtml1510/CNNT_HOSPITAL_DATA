@@ -35,6 +35,8 @@ export default function BackupPage({ token, permissions, onError }) {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [restoreTarget, setRestoreTarget] = useState(null)
+  const [restoreQuarantine, setRestoreQuarantine] = useState(false)
+  const [restoreApplicationLogs, setRestoreApplicationLogs] = useState(false)
   const canCreate = permissions.includes('backup:execute')
   const canRestore = permissions.includes('restore:execute')
 
@@ -75,7 +77,10 @@ export default function BackupPage({ token, permissions, onError }) {
     setError('')
     onError('')
     try {
-      const result = await restoreBackup(token, restoreTarget.id)
+      const result = await restoreBackup(token, restoreTarget.id, {
+        restoreQuarantine,
+        restoreApplicationLogs,
+      })
       if (result.status === 'success') setNotice(result.message || 'Đã khôi phục database và thư mục tệp.')
       setRestoreTarget(null)
       setOffset(0)
@@ -102,7 +107,7 @@ export default function BackupPage({ token, permissions, onError }) {
           <td><span className={`status-pill ${job.status === 'success' ? 'status-active' : 'status-archived'}`}><span />{statusName(job.status)}</span>{job.message && job.status === 'failed' && <small className="job-error">{job.message}</small>}</td>
           <td className="date-cell">{formatBytes(job.bytes_total)}</td>
           <td><code className="checksum-code" title={job.checksum || ''}>{job.checksum ? `${job.checksum.slice(0, 12)}…${job.checksum.slice(-8)}` : '—'}</code></td>
-          <td>{canRestore && job.archive_available && ['backup', 'safety_backup'].includes(job.job_type) && <button className="secondary-button restore-button" disabled={creating || restoring} onClick={() => setRestoreTarget(job)}>Khôi phục</button>}</td>
+          <td>{canRestore && job.archive_available && ['backup', 'safety_backup'].includes(job.job_type) && <button className="secondary-button restore-button" disabled={creating || restoring} onClick={() => { setRestoreQuarantine(false); setRestoreApplicationLogs(false); setRestoreTarget(job) }}>Khôi phục</button>}</td>
         </tr>)}</tbody></table>
         {!loading && page.items.length === 0 && <div className="empty-state"><span>▧</span><strong>Chưa có bản sao lưu</strong><p>{canCreate ? 'Tạo bản sao đầu tiên để bảo vệ database và tệp y tế.' : 'Bản sao lưu sẽ xuất hiện ở đây khi được tạo.'}</p></div>}
         {loading && <div className="loading-state">Đang tải lịch sử sao lưu…</div>}
@@ -111,6 +116,14 @@ export default function BackupPage({ token, permissions, onError }) {
     </section>
     <p className="hint-text page-hint">Bản sao được giữ trên máy chủ trong <code>D:\HospitalBackups</code>. Không xóa hoặc sửa file ZIP thủ công.</p>
 
-    {restoreTarget && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !restoring) setRestoreTarget(null) }}><section className="record-modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="restore-title"><div className="modal-header"><div><div className="section-kicker">XÁC NHẬN KHÔI PHỤC</div><h2 id="restore-title">Thay thế dữ liệu hiện tại?</h2><p>Bản sao #{restoreTarget.id} · {formatDate(restoreTarget.created_at)}</p></div><button className="modal-close" disabled={restoring} onClick={() => setRestoreTarget(null)} aria-label="Đóng">×</button></div><div className="restore-warning"><strong>Thao tác này sẽ thay database và toàn bộ thư mục tệp y tế.</strong><p>Hệ thống sẽ tạo safety backup trước khi khôi phục. Các tệp được thêm sau bản sao này sẽ chuyển vào safety backup và bị thay khỏi thư mục hoạt động.</p></div><div className="modal-actions"><button className="secondary-button" disabled={restoring} onClick={() => setRestoreTarget(null)}>Hủy</button><button className="danger-button" disabled={restoring} onClick={confirmRestore}>{restoring ? 'Đang khôi phục…' : 'Xác nhận khôi phục'}</button></div></section></div>}
+    {restoreTarget && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !restoring) setRestoreTarget(null) }}><section className="record-modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="restore-title">
+      <div className="modal-header"><div><div className="section-kicker">XÁC NHẬN KHÔI PHỤC</div><h2 id="restore-title">Thay thế dữ liệu hiện tại?</h2><p>Bản sao #{restoreTarget.id} · {formatDate(restoreTarget.created_at)}</p></div><button className="modal-close" disabled={restoring} onClick={() => setRestoreTarget(null)} aria-label="Đóng">×</button></div>
+      <div className="restore-warning"><strong>Database và 5 thư mục khoa sẽ được thay thế.</strong><p>Hệ thống tạo safety backup trước. Backup\Incoming, Backup\Repository, RestoreTest và các thư mục khác được giữ nguyên.</p></div>
+      <fieldset className="optional-restore"><legend>Khôi phục riêng (không ghi đè dữ liệu hiện có)</legend>
+        <label><input type="checkbox" checked={restoreQuarantine} onChange={(event) => setRestoreQuarantine(event.target.checked)} disabled={restoring} /> <span><strong>Quarantine</strong><small>Chép vào thư mục Quarantine\RestoredFromBackup riêng cho lần khôi phục này.</small></span></label>
+        <label><input type="checkbox" checked={restoreApplicationLogs} onChange={(event) => setRestoreApplicationLogs(event.target.checked)} disabled={restoring} /> <span><strong>System\ApplicationLogs</strong><small>Chép vào thư mục ApplicationLogs\RestoredFromBackup riêng cho lần khôi phục này.</small></span></label>
+      </fieldset>
+      <div className="modal-actions"><button className="secondary-button" disabled={restoring} onClick={() => setRestoreTarget(null)}>Hủy</button><button className="danger-button" disabled={restoring} onClick={confirmRestore}>{restoring ? 'Đang khôi phục…' : 'Xác nhận khôi phục'}</button></div>
+    </section></div>}
   </section>
 }

@@ -74,7 +74,13 @@ def run_restore(
         raise HTTPException(status_code=409, detail="Backup archive is not available for restore")
 
     try:
-        job = restore_backup(db, backup_job_id, body.confirm)
+        job = restore_backup(
+            db,
+            backup_job_id,
+            body.confirm,
+            restore_quarantine=body.restore_quarantine,
+            restore_application_logs=body.restore_application_logs,
+        )
     except BackupOperationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

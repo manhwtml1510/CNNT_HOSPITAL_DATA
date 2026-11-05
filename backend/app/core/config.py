@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "Hospital Data Protection API"
+    app_version: str = "1.0.0"
     app_env: str = "development"
     api_v1_prefix: str = "/api/v1"
 
@@ -14,6 +15,8 @@ class Settings(BaseSettings):
     db_name: str = "hospital_storage"
     db_user: str = "hospital_app"
     db_password: str
+    mysql_restore_user: str | None = None
+    mysql_restore_password: str | None = None
     
     demo_doctor_password: str = ""
     demo_nurse_password: str = ""

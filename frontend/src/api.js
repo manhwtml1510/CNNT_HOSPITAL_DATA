@@ -87,11 +87,15 @@ export async function createBackup(token) {
   return response.json()
 }
 
-export async function restoreBackup(token, backupJobId) {
+export async function restoreBackup(token, backupJobId, options = {}) {
   const response = await request(`/backups/${backupJobId}/restore`, {
     token,
     method: 'POST',
-    body: JSON.stringify({ confirm: true }),
+    body: JSON.stringify({
+      confirm: true,
+      restore_quarantine: options.restoreQuarantine === true,
+      restore_application_logs: options.restoreApplicationLogs === true,
+    }),
   })
   return response.json()
 }

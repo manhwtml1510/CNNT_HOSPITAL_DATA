@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.app_name,
-    version="1.0.0",
+    version=settings.app_version,
     description="Hospital storage and data protection system",
     lifespan=lifespan,
 )

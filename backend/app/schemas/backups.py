@@ -27,3 +27,5 @@ class BackupJobPageResponse(BaseModel):
 
 class RestoreRequest(BaseModel):
     confirm: Literal[True] = Field(description="Must be true to replace the live database and file store")
+    restore_quarantine: bool = Field(default=False, description="Restore quarantined files into an isolated folder")
+    restore_application_logs: bool = Field(default=False, description="Restore application logs into an isolated folder")
