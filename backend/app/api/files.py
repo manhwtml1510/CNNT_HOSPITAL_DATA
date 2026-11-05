@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import record_audit
 from app.core.database import get_db
-from app.core.dependencies import require_permission
+from app.core.dependencies import reject_during_backup_or_restore, require_permission
 from app.core.file_storage import (
     calculate_sha256,
     get_department_directory,
@@ -36,6 +36,7 @@ async def upload_file(
     request: Request,
     upload: UploadFile = File(...),
     db: Session = Depends(get_db),
+    _maintenance: None = Depends(reject_during_backup_or_restore),
     user: User = Depends(require_permission("files:upload")),
 ):
     statement = select(MedicalRecord).where(

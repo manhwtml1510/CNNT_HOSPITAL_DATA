@@ -9,6 +9,8 @@ import {
   updateRecord,
   uploadFile,
 } from './api.js'
+import AuditPage from './AuditPage.jsx'
+import BackupPage from './BackupPage.jsx'
 
 const TOKEN_KEY = 'hospital_access_token'
 const DEPARTMENTS = ['Clinical', 'Laboratory', 'Imaging', 'Administration', 'HR']
@@ -38,9 +40,18 @@ function initials(name = '') {
   return name.trim().split(/\s+/).slice(-2).map((part) => part[0]).join('').toUpperCase() || 'NV'
 }
 
+function initialSection(profile) {
+  const permissions = new Set(profile.permissions || [])
+  if (permissions.has('records:read')) return 'records'
+  if (permissions.has('audit:read')) return 'audit'
+  if (permissions.has('backup:read')) return 'backups'
+  return 'records'
+}
+
 function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem(TOKEN_KEY) || '')
   const [user, setUser] = useState(null)
+  const [section, setSection] = useState('records')
   const [records, setRecords] = useState([])
   const [offset, setOffset] = useState(0)
   const [hasMore, setHasMore] = useState(false)
@@ -87,6 +98,13 @@ function App() {
       .then(async (profile) => {
         if (cancelled) return
         setUser(profile)
+        setSection(initialSection(profile))
+        if (!profile.permissions?.includes('records:read')) {
+          setRecords([])
+          setOffset(0)
+          setHasMore(false)
+          return
+        }
         try {
           const items = await getRecords(token, 0, 50)
           if (cancelled) return
@@ -142,6 +160,11 @@ function App() {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
     const existing = modal?.record
+    const attachment = existing ? null : form.get('attachment')
+    if (attachment instanceof File && attachment.size > 10 * 1024 * 1024) {
+      setError('Tệp PDF vượt quá giới hạn 10 MB.')
+      return
+    }
     const payload = existing
       ? { title: String(form.get('title')).trim(), status: String(form.get('status')) }
       : {
@@ -159,10 +182,25 @@ function App() {
       setRecords((current) => existing
         ? current.map((record) => record.id === saved.id ? saved : record)
         : [saved, ...current])
-      setNotice(existing ? 'Đã cập nhật hồ sơ.' : 'Đã tạo hồ sơ mới.')
       setModal(null)
+      if (!existing && attachment instanceof File && attachment.size > 0) {
+        try {
+          const uploaded = await uploadFile(token, saved.id, attachment)
+          setUploads((current) => [{ ...uploaded, record_number: saved.record_number }, ...current])
+          setNotice(`Đã tạo hồ sơ và tải lên ${uploaded.original_filename}.`)
+        } catch (uploadError) {
+          setNotice('')
+          setError(`Đã tạo hồ sơ #${saved.id}, nhưng tải PDF thất bại. Hãy dùng nút tải tệp ở dòng hồ sơ để thử lại. ${uploadError.message || ''}`)
+        }
+      } else {
+        setNotice(existing ? 'Đã cập nhật hồ sơ.' : 'Đã tạo hồ sơ mới.')
+      }
     } catch (err) {
-      setError(err instanceof ApiError && err.status === 409 ? 'Mã hồ sơ đã tồn tại.' : err.message)
+      if (err instanceof ApiError && err.status === 409 && /record number already exists/i.test(err.message)) {
+        setError('Mã hồ sơ đã tồn tại.')
+      } else {
+        setError(err.message || 'Không thể lưu hồ sơ. Hãy thử lại sau.')
+      }
     } finally {
       setSaving(false)
     }
@@ -226,13 +264,12 @@ function App() {
         </a>
         <div className="side-section-label">KHÔNG GIAN LÀM VIỆC</div>
         <nav className="side-nav" aria-label="Điều hướng chính">
-          <a className="nav-item active" href="#records" onClick={() => setMobileNav(false)}><span className="nav-icon">▦</span>Tổng quan</a>
-          <a className="nav-item" href="#records" onClick={() => setMobileNav(false)}><span className="nav-icon">▤</span>Hồ sơ bệnh án<span className="nav-count">{records.length}</span></a>
-          <div className="nav-item muted" title="Tính năng chưa có API"><span className="nav-icon">◷</span>Nhật ký truy cập<span className="nav-soon">SẮP CÓ</span></div>
-          <div className="nav-item muted" title="Tính năng chưa có API"><span className="nav-icon">⟳</span>Sao lưu & khôi phục<span className="nav-soon">SẮP CÓ</span></div>
+          {can('records:read') && <button className={`nav-item ${section === 'records' ? 'active' : ''}`} onClick={() => { setSection('records'); setMobileNav(false); setError('') }}><span className="nav-icon">▤</span>Hồ sơ bệnh án<span className="nav-count">{records.length}</span></button>}
+          {can('audit:read') && <button className={`nav-item ${section === 'audit' ? 'active' : ''}`} onClick={() => { setSection('audit'); setMobileNav(false); setError('') }}><span className="nav-icon">◷</span>Nhật ký truy cập</button>}
+          {can('backup:read') && <button className={`nav-item ${section === 'backups' ? 'active' : ''}`} onClick={() => { setSection('backups'); setMobileNav(false); setError('') }}><span className="nav-icon">⟳</span>Sao lưu & khôi phục</button>}
         </nav>
         <div className="sidebar-spacer" />
-        <div className="security-card"><span className="security-icon">♢</span><div><strong>Dữ liệu được bảo vệ</strong><p>Quyền truy cập theo khoa và vai trò.</p></div><span className="secure-dot" /></div>
+        <div className="security-card"><span className="security-icon">♢</span><div><strong>Dữ liệu được bảo vệ</strong><p>Truy cập và thao tác theo quyền được cấp.</p></div><span className="secure-dot" /></div>
         <button className="profile-card" onClick={clearSession} title="Đăng xuất">
           <span className="avatar">{initials(user.full_name)}</span>
           <span className="profile-copy"><strong>{user.full_name}</strong><small>{ROLE_NAMES[user.roles?.[0]] || 'Nhân viên'}</small></span>
@@ -243,18 +280,18 @@ function App() {
       <main className="main-area">
         <header className="topbar">
           <button className="mobile-menu" onClick={() => setMobileNav(true)} aria-label="Mở menu">☰</button>
-          <div className="breadcrumb"><span>Không gian làm việc</span><b>/</b><strong>Hồ sơ bệnh án</strong></div>
+          <div className="breadcrumb"><span>Không gian làm việc</span><b>/</b><strong>{section === 'audit' ? 'Nhật ký truy cập' : section === 'backups' ? 'Sao lưu & khôi phục' : 'Hồ sơ bệnh án'}</strong></div>
           <div className="topbar-right"><span className="today-label">{new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())}</span><span className="topbar-avatar">{initials(user.full_name)}</span></div>
         </header>
 
         <div className="page-content" id="records">
-          <section className="welcome-row">
-            <div><div className="eyebrow"><span className="live-dot" /> CỔNG HỒ SƠ Y TẾ AN TOÀN</div><h1>Chào buổi sáng, {user.full_name.split(' ').slice(-1)[0]}</h1><p className="page-intro">Theo dõi và quản lý hồ sơ trong phạm vi được cấp quyền.</p></div>
-            {can('records:create') && <button className="primary-button" onClick={() => { setError(''); setModal({ type: 'create' }) }}><span>＋</span> Tạo hồ sơ mới</button>}
-          </section>
-
           {error && <div className="alert error-alert" role="alert"><span>!</span>{error}<button onClick={() => setError('')} aria-label="Đóng">×</button></div>}
           {notice && <div className="toast" role="status"><span>✓</span>{notice}</div>}
+          {section === 'records' ? <>
+          <section className="welcome-row">
+            <div><div className="eyebrow"><span className="live-dot" /> CỔNG HỒ SƠ Y TẾ AN TOÀN</div><h1>Chào buổi sáng, {user.full_name.split('')}</h1><p className="page-intro">Theo dõi và quản lý hồ sơ trong phạm vi được cấp quyền.</p></div>
+            {can('records:create') && <button className="primary-button" onClick={() => { setError(''); setModal({ type: 'create' }) }}><span>＋</span> Tạo hồ sơ mới</button>}
+          </section>
 
           <section className="stats-grid" aria-label="Thống kê hồ sơ">
             <StatCard label="Hồ sơ trong danh sách" value={records.length} icon="▤" tone="blue" caption={isSystemAdmin ? 'Tổng quan mọi khoa' : `Phạm vi ${DEPARTMENT_NAMES[user.department] || user.department || 'được cấp'}`} />
@@ -292,11 +329,12 @@ function App() {
           </section>
 
           {uploads.length > 0 && <section className="uploads-panel"><div className="uploads-title"><div><div className="section-kicker">TỆP VỪA TẢI</div><h2>Trong phiên này</h2></div><span>{uploads.length} tệp</span></div><div className="uploads-list">{uploads.slice(0, 4).map((file) => <div className="upload-item" key={file.id}><span className="upload-file-icon">▧</span><span className="upload-file-copy"><strong>{file.original_filename}</strong><small>{file.record_number} · {(file.size_bytes / 1024 / 1024).toFixed(2)} MB</small></span><button className="text-button" onClick={() => handleDownload(file)}>Tải xuống ↓</button></div>)}</div><p className="hint-text">Tệp đính kèm hiện được liệt kê trong phiên này. API chưa cung cấp danh sách tệp đã lưu từ các phiên trước.</p></section>}
+          </> : section === 'audit' ? <AuditPage token={token} /> : section === 'backups' ? <BackupPage token={token} permissions={user.permissions || []} onError={setError} /> : <div className="empty-state"><span>♢</span><strong>Tài khoản chưa có quyền xem khu vực nào.</strong></div>}
           <footer className="page-footer"><span>✚ <strong>MedVault</strong> · Bảo vệ dữ liệu y tế</span><span>Chỉ truy cập hồ sơ trong phạm vi được cấp quyền</span></footer>
         </div>
       </main>
 
-      {modal && <RecordModal type={modal.type} record={modal.record} departments={filteredDepartmentOptions} saving={saving} onClose={() => setModal(null)} onSubmit={handleSaveRecord} />}
+      {modal && <RecordModal type={modal.type} record={modal.record} departments={filteredDepartmentOptions} canUpload={can('files:upload')} saving={saving} onClose={() => setModal(null)} onSubmit={handleSaveRecord} />}
     </div>
   )
 }
@@ -316,7 +354,7 @@ function LoginScreen({ onSubmit, saving, error }) {
   </section><div className="login-aside"><div className="aside-motif">✚</div><p>HỒ SƠ CHĂM SÓC<br /><strong>ĐƯỢC BẢO VỆ.</strong></p><span>Không gian làm việc cho đội ngũ y tế.</span></div></main>
 }
 
-function RecordModal({ type, record, departments, saving, onClose, onSubmit }) {
+function RecordModal({ type, record, departments, canUpload, saving, onClose, onSubmit }) {
   const editing = type === 'edit'
   return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <section className="record-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -325,6 +363,7 @@ function RecordModal({ type, record, departments, saving, onClose, onSubmit }) {
         {!editing && <div className="form-row"><label>Mã hồ sơ<input name="record_number" placeholder="VD: CL-2026-001" maxLength="50" required /></label><label>Mã bệnh nhân<input name="patient_code" placeholder="VD: BN-00142" maxLength="50" required /></label></div>}
         <label>Tiêu đề hồ sơ<input name="title" defaultValue={record?.title || ''} placeholder="Nhập tiêu đề hồ sơ" maxLength="255" required autoFocus={editing} /></label>
         {editing ? <label>Trạng thái<select name="status" defaultValue={record.status}><option value="active">Đang hoạt động</option><option value="archived">Đã lưu trữ</option></select></label> : <label>Khoa phụ trách<select name="department" required defaultValue={departments.length === 1 ? departments[0] : ''}><option value="" disabled>Chọn khoa</option>{departments.map((department) => <option key={department} value={department}>{DEPARTMENT_NAMES[department] || department}</option>)}</select></label>}
+        {!editing && canUpload && <label>Tệp đính kèm PDF <input type="file" name="attachment" accept=".pdf,application/pdf" /><small className="field-hint">Không bắt buộc · Tối đa 10 MB</small></label>}
         <div className="modal-actions"><button className="secondary-button" type="button" onClick={onClose}>Hủy</button><button className="primary-button" disabled={saving}>{saving ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Tạo hồ sơ'}<span>→</span></button></div>
       </form>
     </section>

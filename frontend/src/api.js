@@ -68,3 +68,30 @@ export async function uploadFile(token, recordId, file) {
 export async function downloadFile(token, fileId) {
   return request(`/files/${fileId}/download`, { token })
 }
+
+export async function getAuditLogs(token, { limit = 25, offset = 0, action = '', outcome = '' } = {}) {
+  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+  if (action) query.set('action', action)
+  if (outcome) query.set('outcome', outcome)
+  const response = await request(`/audit-logs?${query}`, { token })
+  return response.json()
+}
+
+export async function getBackupJobs(token, limit = 25, offset = 0) {
+  const response = await request(`/backups?limit=${limit}&offset=${offset}`, { token })
+  return response.json()
+}
+
+export async function createBackup(token) {
+  const response = await request('/backups', { token, method: 'POST' })
+  return response.json()
+}
+
+export async function restoreBackup(token, backupJobId) {
+  const response = await request(`/backups/${backupJobId}/restore`, {
+    token,
+    method: 'POST',
+    body: JSON.stringify({ confirm: true }),
+  })
+  return response.json()
+}

@@ -1,11 +1,14 @@
 import jwt
 
+from collections.abc import Generator
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
+from app.core.backup import BackupOperationError, backup_operation_lock
 from app.core.security import decode_access_token
 from app.models import Role, User
 
@@ -61,3 +64,11 @@ def require_permission(permission_code: str):
         return user
 
     return permission_checker
+
+
+def reject_during_backup_or_restore() -> Generator[None, None, None]:
+    try:
+        with backup_operation_lock():
+            yield
+    except BackupOperationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc

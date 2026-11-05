@@ -13,6 +13,7 @@ from app.core.audit import record_audit
 from app.core.database import get_db
 from app.core.dependencies import (
     get_current_user,
+    reject_during_backup_or_restore,
     require_permission,
 )
 from app.models import MedicalRecord, User
@@ -123,6 +124,7 @@ def create_record(
     payload: MedicalRecordCreateRequest,
     request: Request,
     db: Session = Depends(get_db),
+    _maintenance: None = Depends(reject_during_backup_or_restore),
     user: User = Depends(require_permission("records:create")),
 ):
     # Người dùng thông thường chỉ được tạo hồ sơ trong khoa của mình.
@@ -189,6 +191,7 @@ def update_record(
     payload: MedicalRecordUpdateRequest,
     request: Request,
     db: Session = Depends(get_db),
+    _maintenance: None = Depends(reject_during_backup_or_restore),
     user: User = Depends(require_permission("records:update")),
 ):
     statement = select(MedicalRecord).where(

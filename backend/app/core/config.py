@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     
     storage_root: str = r"D:\HospitalData"
     max_upload_size_bytes: int = 10*1024*1024
+    backup_root: str = r"D:\HospitalBackups"
+    mysqldump_path: str = "mysqldump"
+    mysql_path: str = "mysql"
 
     model_config = SettingsConfigDict(
         env_file=".env",
