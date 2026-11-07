@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     demo_nurse_password: str = ""
     demo_lab_password: str = ""
     demo_admin_password: str = ""
+    demo_adminstaff_password: str = ""
     
     jwt_secret_key: str
     access_token_expire_minutes: int = 20

@@ -104,6 +104,13 @@ DEMO_USERS = [
         "role": "system_admin",
         "password": settings.demo_admin_password,
     },
+    {
+        "username": "demo_adminstaff",
+        "full_name": "Nhân viên hành chính Demo",
+        "department": "Administration",
+        "role": "admin_staff",
+        "password": settings.demo_adminstaff_password,
+    },
 ]
 
 
